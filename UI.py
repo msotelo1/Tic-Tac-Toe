@@ -1,99 +1,84 @@
+import socket
+import threading
 from tkinter import *
+from game_logic import TicTacToeGame  # updated to match the class name you provided
 
-# Function for starting the game 
-def gameStartedUI(start):
+# Function to send result to server
+def send_game_result(result_msg):
+    try:
+        with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
+            s.connect(("localhost", 9999))  # Change to actual server IP/port
+            s.sendall(result_msg.encode())
+    except Exception as e:
+        print("[Error] Failed to send result to server:", e)
+
+# Threaded function to receive remote moves
+def receive_moves(ui_instance):
+    with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
+        s.bind(('0.0.0.0', 8888))  # Listening port for incoming moves
+        s.listen()
+        print("[Info] Waiting for remote moves...")
+        conn, addr = s.accept()
+        print(f"[Info] Connected to {addr}")
+        with conn:
+            while True:
+                data = conn.recv(1024)
+                if not data:
+                    break
+                move = data.decode().strip()
+                try:
+                    row, col = map(int, move.split(','))
+                    ui_instance.remote_move(row, col)
+                except Exception as e:
+                    print("[Error] Invalid move received:", move, e)
+
+class TicTacToeUI:
+    def __init__(self, root):
+        self.root = root
+        self.root.title("Multicomputer Tic Tac Toe")
+        self.game = TicTacToeGame()
+        self.buttons = [[None for _ in range(3)] for _ in range(3)]
+        self.build_grid()
+        threading.Thread(target=receive_moves, args=(self,), daemon=True).start()
+
+    def build_grid(self):
+        for r in range(3):
+            for c in range(3):
+                btn = Button(self.root, text='', font=('Arial', 40), width=5, height=2,
+                             command=lambda row=r, col=c: self.local_move(row, col))
+                btn.grid(row=r, column=c)
+                self.buttons[r][c] = btn
+
+    def local_move(self, row, col):
+        result = self.game.make_move(row, col)
+        if "Invalid" not in result:
+            self.update_ui(row, col)
+            self.check_game_over(result)
+
+    def remote_move(self, row, col):
+        print(f"[Info] Applying remote move: ({row}, {col})")
+        result = self.game.make_move(row, col)
+        if "Invalid" not in result:
+            self.update_ui(row, col)
+            self.check_game_over(result)
+
+    def update_ui(self, row, col):
+        player = self.game.board[row][col]
+        self.buttons[row][col]['text'] = player
+        self.buttons[row][col]['state'] = DISABLED
+
+    def check_game_over(self, result):
+        if result in ["X wins", "O wins", "Draw"]:
+            send_game_result(result)
+            self.disable_all_buttons()
+            print("[Game Over]", result)
+
+    def disable_all_buttons(self):
+        for row in self.buttons:
+            for btn in row:
+                btn['state'] = DISABLED
+
+if __name__ == '__main__':
     root = Tk()
-    root.title("Tic-Tac-Toe")
-    root.geometry("500x500")
-    gameFrame = Frame(root)
-    gameFrame.pack(fill=BOTH, expand=True)
-
-    if start == 0:
-        
-
-        
-
-        ##Loading screen frame
-        
-        loadingLabel = Label(gameFrame, text = 'Waiting For Players....')
-        loadingLabel.pack(fill=BOTH, expand=True)
-    
-        
-    else: 
-   
-        
-    
-        # Creates grid
-        for i in range(3):
-            gameFrame.rowconfigure(i, weight=1)
-            gameFrame.columnconfigure(i, weight=1)
-
-
-        #Button functionality 
-        def changeCharacter(b, turn):
-            if turn == 1: 
-                b.config(text = 'X')
-                
-            else:
-                b.config(text = 'O')
-                
-
-        def disableButton(button):
-            button.configure(state=DISABLED)
-            button.configure(command = disableButton)
-
-            
-            
-
-        def buttonClicked(button):
-            button.configure(command = lambda b = button:( changeCharacter(b, turn), disableButton(button)))
-            
-        
-        
-
-        
-            
-        p1Button = Button(gameFrame, text='1')
-        p1Button.grid(row=0, column=0, sticky='nsew')
-        buttonClicked(p1Button)
-
-        p2Button = Button(gameFrame, text='2')
-        p2Button.grid(row=0, column=1, sticky='nsew')
-        buttonClicked(p2Button)
-
-        p3Button = Button(gameFrame, text='3')
-        p3Button.grid(row=0, column=2, sticky='nsew')
-        buttonClicked(p3Button)
-
-        p4Button = Button(gameFrame, text='4')
-        p4Button.grid(row=1, column=0, sticky='nsew')
-        buttonClicked(p4Button)
-
-        p5Button = Button(gameFrame, text='5')
-        p5Button.grid(row=1, column=1, sticky='nsew')
-        buttonClicked(p5Button)
-
-        p6Button = Button(gameFrame, text='6')
-        p6Button.grid(row=1, column=2, sticky='nsew')
-        buttonClicked(p6Button)
-
-        p7Button = Button(gameFrame, text='7')
-        p7Button.grid(row=2, column=0, sticky='nsew')
-        buttonClicked(p7Button)
-
-        p8Button = Button(gameFrame, text='8')
-        p8Button.grid(row=2, column=1, sticky='nsew')
-        buttonClicked(p8Button)
-
-        p9Button = Button(gameFrame, text='9')
-        p9Button.grid(row=2, column=2, sticky='nsew')
-        buttonClicked(p9Button)
-
+    app = TicTacToeUI(root)
     root.mainloop()
-
-start = 0
-turn = 0
-
-#Need to connect start with the server for waiting for the game to start and then with Mathews code for when the game ends
-#Need to connect turn with Mathews game logic
-gameStartedUI(start)
